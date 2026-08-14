@@ -1,0 +1,41 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for npm trusted publishing (OIDC). No NPM_TOKEN secret is used.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --no-frozen-lockfile
+
+      # `pnpm test` is not run here: the suite depends on @postify/contracts,
+      # a `workspace:*` package that exists only in the Postify monorepo this
+      # repo is mirrored from.
+      - run: pnpm typecheck
+
+      # `files` ships only `dist`, and there is no prepublishOnly hook, so the
+      # build has to happen before publish or the tarball would be empty.
+      - run: pnpm build
+
+      # Trusted publishing requires npm >= 11.5.1; setup-node ships an older npm.
+      - run: npm install -g npm@latest
+
+      - run: npm publish --access public
